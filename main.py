@@ -69,7 +69,7 @@ def temp_to_pixel(temp, min_temp, max_temp, height):
 def add_measurement(sensor_id, current_value: float):
     readings = measurements[sensor_id]
     if len(readings) >= max_number_of_readings:
-        readings.pop()
+        readings.pop(0)
     readings.append(current_value)
     print("Sensor id: {} Temperature: {}".format(sensor_id, current_value))
 
