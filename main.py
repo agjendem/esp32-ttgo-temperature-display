@@ -56,22 +56,25 @@ class DS18B20Sensor(Sensor):
 ow = machine.Onewire(33)
 
 sensors = [
-    DS18B20Sensor("Luft", machine.Onewire.ds18x20(ow, 0), display.TFT.RED),
-    DS18B20Sensor("Bakke", machine.Onewire.ds18x20(ow, 1), display.TFT.GREEN),
-    DS18B20Sensor("Inne", machine.Onewire.ds18x20(ow, 2), display.TFT.BLUE)
+    DS18B20Sensor(name="Luft", sensor=machine.Onewire.ds18x20(ow, 0), color=display.TFT.RED),
+    DS18B20Sensor(name="Bakke", sensor=machine.Onewire.ds18x20(ow, 1), color=display.TFT.GREEN),
+    DS18B20Sensor(name="Inne", sensor=machine.Onewire.ds18x20(ow, 2), color=display.TFT.BLUE)
 ]
 
 
 class Visualization:
-    def __init__(self):
+    def __init__(self, min_temp, max_temp):
+        self.min_temp = min_temp
+        self.max_temp = max_temp
         self.tft = self._init_display()
+
         self.switch_window_to_whole_screen()
         self.graph_x0, \
             self.graph_y0, \
             self.graph_x1, \
-            self.graph_y1, \
-            self.graph_height, \
-            self.graph_width = self.render_graph_area_with_legend()
+            self.graph_y1 = self.render_graph_area_with_legend(self.min_temp, self.max_temp)
+        self.graph_height = self.graph_y1 - self.graph_y0
+        self.graph_width = self.graph_x1 - self.graph_x0
 
     @staticmethod
     def _init_display():
@@ -98,10 +101,11 @@ class Visualization:
 
         return tft
 
-    def render_graph_area_with_legend(self):
-        # Width of broadest legend text
+    def render_graph_area_with_legend(self, min_temp, max_temp):
+        # Width of broadest legend text expected
         x_legend_width = self.tft.textWidth("+30") + 1
-    
+        temp_step_size = 5
+
         # Available space to draw a graph on
         x0 = x_legend_width
         y0 = 20
@@ -110,8 +114,8 @@ class Visualization:
         self.tft.rect(x0, y0, x1, y1, self.tft.WHITE)
     
         # Draw legend X indicators
-        for i in range(-20, 35, 5):
-            tp = temp_to_pixel(temp=i, min_temp=-20, max_temp=30, height=(self.tft.winsize()[1]-2)-(y0+1))
+        for i in range(min_temp, max_temp, temp_step_size):
+            tp = self.temp_to_pixel_height(i, (self.tft.winsize()[1]-2)-(y0+1))
             # TODO: Hvorfor -20 på tpene?? hvorfor tegnes ikke alle strekene/brukes hele rangen?
             self.tft.line(x0-4, tp - 20, x0, tp - 20, self.tft.WHITE)
     
@@ -125,14 +129,12 @@ class Visualization:
                     color = self.tft.RED
                 self.tft.text(0, tp - 20 - int(self.tft.fontSize()[1]/2), "{}".format(i), color)
     
-        # Return area to draw on inside the graph frame + convenience height / width:
+        # Return area to draw on _inside_ the graph frame:
         return \
             x0+1, \
             y0+1, \
             self.tft.winsize()[0]-2, \
-            self.tft.winsize()[1]-2, \
-            (self.tft.winsize()[1]-2)-(y0+1), \
-            (self.tft.winsize()[0]-2)-(x0+1)
+            self.tft.winsize()[1]-2
 
     def switch_window_to_whole_screen(self):
         # Set window size - library is buggy with the display, have to move the view slightly
@@ -147,37 +149,47 @@ class Visualization:
     def clear_current_window(self):
         self.tft.clearwin(self.tft.BLACK)
 
+    def temp_to_pixel_height(self, temp, height):
+        temp_range = abs(self.min_temp - self.max_temp)
+        pixels_per_degree = height / temp_range
+        result = height - int(pixels_per_degree * temp)
+        return result
 
-def temp_to_pixel(temp, min_temp, max_temp, height):
-    temp_range = abs(min_temp - max_temp)
-    pixels_per_degree = height / temp_range
-    result = height - int(pixels_per_degree * temp)
-    return result
+    def temp_to_pixel(self, temp):
+        return self.temp_to_pixel_height(temp, self.graph_height)
 
 
-vis = Visualization()
+vis = Visualization(min_temp=-20, max_temp=40)
 while True:
+    #
     # Draw current temperatures on upper row for all sensors, in their colours:
+    #
     # .. but first draw empty string to initialize/reset LASTX to zero position
     vis.switch_window_to_whole_screen()
     vis.tft.text(1, 0, "")
     for sensor in sensors:
-        vis.tft.text(vis.tft.LASTX, 0, '{}: {} '.format(sensor.get_name(), sensor.get_current_value()), sensor.get_color())
+        vis.tft.text(vis.tft.LASTX,
+                     0,
+                     '{}: {} '.format(sensor.get_name(), sensor.get_current_value()),
+                     sensor.get_color())
 
+    #
     # .. redraw graphs for all sensors:
+    #
     vis.switch_window_to_graph()
     vis.clear_current_window()
+
+    # Depending on window size, the graph may not fill the entire screen due to rounding,
+    # depending on the size and number of readings:
+    step_size = math.floor(vis.graph_width / max_number_of_readings)
+
     for sensor in sensors:
         current_position = 1
-        # Depending on window size, the graph may not fill the entire screen due to rounding,
-        # depending on the size and number of readings:
-        step_size = math.floor(vis.graph_width / max_number_of_readings)
 
         for measurement in sensor.get_measurements():
             if sensor.get_model() is DS18B20:
-                tp = temp_to_pixel(temp=measurement, min_temp=-20, max_temp=30, height=vis.graph_height)
-                # TODO: Why -20 here?
-                vis.tft.line(current_position, tp - 20, current_position + step_size, tp - 20, sensor.get_color())
+                tp = vis.temp_to_pixel(measurement)
+                vis.tft.line(current_position, tp, current_position + step_size, tp, sensor.get_color())
                 current_position += step_size
             else:
                 # Not implemented yet:
