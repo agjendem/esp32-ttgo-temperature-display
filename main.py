@@ -61,10 +61,8 @@ class Visualization:
         self.switch_window_to_whole_screen()
         self.graph_x0, \
             self.graph_y0, \
-            self.graph_x1, \
-            self.graph_y1 = self.render_graph_area_with_legend(self.min_temp, self.max_temp)
-        self.graph_height = self.graph_y1 - self.graph_y0
-        self.graph_width = self.graph_x1 - self.graph_x0
+            self.graph_width, \
+            self.graph_height = self.render_graph_area_with_legend(self.min_temp, self.max_temp)
 
     @staticmethod
     def _init_display():
@@ -94,20 +92,27 @@ class Visualization:
     def render_graph_area_with_legend(self, min_temp, max_temp):
         # Width of broadest legend text expected
         x_legend_width = self.tft.textWidth("+30") + 1
+        y_top_bar_height = 20
         temp_step_size = 5
 
         # Available space to draw a graph on
         x0 = x_legend_width
-        y0 = 20
-        x1 = self.tft.winsize()[0] - x_legend_width
-        y1 = self.tft.winsize()[1] - 20
-        self.tft.rect(x0, y0, x1, y1, self.tft.WHITE)
+        y0 = y_top_bar_height
+        width = self.tft.winsize()[0] - x_legend_width
+        height = self.tft.winsize()[1] - y_top_bar_height
+        internal_graph_height = height - 2  # _inside_ the box
+
+        # Draw a frame around the graph area
+        self.tft.rect(x0, y0, width, height, self.tft.WHITE)
     
         # Draw legend X indicators
-        for i in range(min_temp, max_temp, temp_step_size):
-            tp = self.temp_to_pixel_height(i, (self.tft.winsize()[1]-2)-(y0+1))
-            # TODO: Hvorfor -20 på tpene?? hvorfor tegnes ikke alle strekene/brukes hele rangen?
-            self.tft.line(x0-4, tp - 20, x0, tp - 20, self.tft.WHITE)
+        for i in range(min_temp, max_temp + 1, temp_step_size):
+            tp = self.temp_to_pixel_height(i, internal_graph_height)
+            self.tft.line(x0 - 4,
+                          y0 + 1 + tp,
+                          x0,
+                          y0 + 1 + tp,
+                          self.tft.WHITE)
     
             # Drawing X legend (temp in degrees C)
             if i % 10 is 0:
@@ -117,14 +122,17 @@ class Visualization:
                     color = self.tft.WHITE
                 else:
                     color = self.tft.RED
-                self.tft.text(0, tp - 20 - int(self.tft.fontSize()[1]/2), "{}".format(i), color)
+                self.tft.text(0,
+                              y0 + 1 + tp - int(self.tft.fontSize()[1]/2),  # Centered vertically
+                              "{}".format(i),
+                              color)
     
         # Return area to draw on _inside_ the graph frame:
         return \
-            x0+1, \
-            y0+1, \
-            self.tft.winsize()[0]-2, \
-            self.tft.winsize()[1]-2
+            x0 + 1, \
+            y0 + 1, \
+            width - 2, \
+            height - 2
 
     def switch_window_to_whole_screen(self):
         # Set window size - library is buggy with the display, have to move the view slightly
@@ -133,8 +141,8 @@ class Visualization:
     def switch_window_to_graph(self):
         self.tft.setwin(40 + self.graph_x0,
                         52 + self.graph_y0,
-                        40 + self.graph_x1,
-                        52 + self.graph_y1)
+                        40 + self.graph_width + self.graph_x0 - 1,
+                        52 + self.graph_height + self.graph_y0 - 1)
 
     def clear_current_window(self):
         self.tft.clearwin(self.tft.BLACK)
@@ -142,7 +150,7 @@ class Visualization:
     def temp_to_pixel_height(self, temp, height):
         temp_range = abs(self.min_temp - self.max_temp)
         pixels_per_degree = height / temp_range
-        result = height - int(pixels_per_degree * temp)
+        result = height - int(pixels_per_degree * (temp + abs(self.min_temp)))
         return result
 
     def temp_to_pixel(self, temp):
