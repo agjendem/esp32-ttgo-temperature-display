@@ -52,16 +52,6 @@ class DS18B20Sensor(Sensor):
         return "{:2.1f}".format(current_value)
 
 
-# dht = machine.DHT(machine.Pin(25), machine.DHT.DHT2X)
-ow = machine.Onewire(33)
-
-sensors = [
-    DS18B20Sensor(name="Luft", sensor=machine.Onewire.ds18x20(ow, 0), color=display.TFT.RED),
-    DS18B20Sensor(name="Bakke", sensor=machine.Onewire.ds18x20(ow, 1), color=display.TFT.GREEN),
-    DS18B20Sensor(name="Inne", sensor=machine.Onewire.ds18x20(ow, 2), color=display.TFT.BLUE)
-]
-
-
 class Visualization:
     def __init__(self, min_temp, max_temp):
         self.min_temp = min_temp
@@ -158,6 +148,15 @@ class Visualization:
     def temp_to_pixel(self, temp):
         return self.temp_to_pixel_height(temp, self.graph_height)
 
+
+# dht = machine.DHT(machine.Pin(25), machine.DHT.DHT2X)
+ow = machine.Onewire(33)
+
+sensors = [
+    DS18B20Sensor(name="Luft", sensor=machine.Onewire.ds18x20(ow, 0), color=display.TFT.RED),
+    DS18B20Sensor(name="Bakke", sensor=machine.Onewire.ds18x20(ow, 1), color=display.TFT.GREEN),
+    DS18B20Sensor(name="Inne", sensor=machine.Onewire.ds18x20(ow, 2), color=display.TFT.BLUE)
+]
 
 vis = Visualization(min_temp=-20, max_temp=40)
 while True:
