@@ -10,19 +10,6 @@ DHT22 = "DHT22"
 # Setup data structure for local historical temperature measurements for the sensors:
 max_number_of_readings = 60
 
-# Initialize the display
-tft = display.TFT()
-tft.init(tft.ST7789, rst_pin=23, backl_pin=4, miso=0, mosi=19, clk=18, cs=5, dc=16, width=235, height=340, backl_on=1)
-
-# Invert colors
-tft.tft_writecmd(0x21)
-
-# Set orientation (optional)
-tft.orient(tft.LANDSCAPE)
-
-# Set window size - library is buggy with the display, have to move the view slightly
-tft.setwin(40, 52, 278, 186)
-
 
 class Sensor:
     def __init__(self, name, model, sensor, color):
@@ -69,10 +56,96 @@ class DS18B20Sensor(Sensor):
 ow = machine.Onewire(33)
 
 sensors = [
-    DS18B20Sensor("Luft", machine.Onewire.ds18x20(ow, 0), tft.RED),
-    DS18B20Sensor("Bakke", machine.Onewire.ds18x20(ow, 1), tft.GREEN),
-    DS18B20Sensor("Inne", machine.Onewire.ds18x20(ow, 2), tft.BLUE)
+    DS18B20Sensor("Luft", machine.Onewire.ds18x20(ow, 0), display.TFT.RED),
+    DS18B20Sensor("Bakke", machine.Onewire.ds18x20(ow, 1), display.TFT.GREEN),
+    DS18B20Sensor("Inne", machine.Onewire.ds18x20(ow, 2), display.TFT.BLUE)
 ]
+
+
+class Visualization:
+    def __init__(self):
+        self.tft = self._init_display()
+        self.switch_window_to_whole_screen()
+        self.graph_x0, \
+            self.graph_y0, \
+            self.graph_x1, \
+            self.graph_y1, \
+            self.graph_height, \
+            self.graph_width = self.render_graph_area_with_legend()
+
+    @staticmethod
+    def _init_display():
+        # Initialize the display
+        # https://github.com/loboris/MicroPython_ESP32_psRAM_LoBo/wiki/display
+        tft = display.TFT()
+        tft.init(tft.ST7789,
+                 rst_pin=23,
+                 backl_pin=4,
+                 miso=0,
+                 mosi=19,
+                 clk=18,
+                 cs=5,
+                 dc=16,
+                 width=235,
+                 height=340,
+                 backl_on=1)
+
+        # Invert colors
+        tft.tft_writecmd(0x21)
+
+        # Set orientation (optional)
+        tft.orient(tft.LANDSCAPE)
+
+        return tft
+
+    def render_graph_area_with_legend(self):
+        # Width of broadest legend text
+        x_legend_width = self.tft.textWidth("+30") + 1
+    
+        # Available space to draw a graph on
+        x0 = x_legend_width
+        y0 = 20
+        x1 = self.tft.winsize()[0] - x_legend_width
+        y1 = self.tft.winsize()[1] - 20
+        self.tft.rect(x0, y0, x1, y1, self.tft.WHITE)
+    
+        # Draw legend X indicators
+        for i in range(-20, 35, 5):
+            tp = temp_to_pixel(temp=i, min_temp=-20, max_temp=30, height=(self.tft.winsize()[1]-2)-(y0+1))
+            # TODO: Hvorfor -20 på tpene?? hvorfor tegnes ikke alle strekene/brukes hele rangen?
+            self.tft.line(x0-4, tp - 20, x0, tp - 20, self.tft.WHITE)
+    
+            # Drawing X legend (temp in degrees C)
+            if i % 10 is 0:
+                if i < 0:
+                    color = self.tft.BLUE
+                elif i == 0:
+                    color = self.tft.WHITE
+                else:
+                    color = self.tft.RED
+                self.tft.text(0, tp - 20 - int(self.tft.fontSize()[1]/2), "{}".format(i), color)
+    
+        # Return area to draw on inside the graph frame + convenience height / width:
+        return \
+            x0+1, \
+            y0+1, \
+            self.tft.winsize()[0]-2, \
+            self.tft.winsize()[1]-2, \
+            (self.tft.winsize()[1]-2)-(y0+1), \
+            (self.tft.winsize()[0]-2)-(x0+1)
+
+    def switch_window_to_whole_screen(self):
+        # Set window size - library is buggy with the display, have to move the view slightly
+        self.tft.setwin(40, 52, 278, 186)
+
+    def switch_window_to_graph(self):
+        self.tft.setwin(40 + self.graph_x0,
+                        52 + self.graph_y0,
+                        40 + self.graph_x1,
+                        52 + self.graph_y1)
+
+    def clear_current_window(self):
+        self.tft.clearwin(self.tft.BLACK)
 
 
 def temp_to_pixel(temp, min_temp, max_temp, height):
@@ -82,72 +155,31 @@ def temp_to_pixel(temp, min_temp, max_temp, height):
     return result
 
 
-def draw_temp_graph():
-    # Width of broadest legend text
-    x_legend_width = tft.textWidth("+30") + 1
-
-    # Available space to draw a graph on
-    x0 = x_legend_width
-    y0 = 20
-    x1 = tft.winsize()[0] - x_legend_width
-    y1 = tft.winsize()[1] - 20
-    tft.rect(x0, y0, x1, y1, tft.WHITE)
-
-    # Draw legend X indicators
-    for i in range(-20, 35, 5):
-        tp = temp_to_pixel(temp=i, min_temp=-20, max_temp=30, height=(tft.winsize()[1]-2)-(y0+1))
-        # TODO: Hvorfor -20 på tpene?? hvorfor tegnes ikke alle strekene/brukes hele rangen?
-        tft.line(x0-4, tp - 20, x0, tp - 20, tft.WHITE)
-
-        # Drawing X legend (temp in degrees C)
-        if i % 10 is 0:
-            if i < 0:
-                color = tft.BLUE
-            elif i == 0:
-                color = tft.WHITE
-            else:
-                color = tft.RED
-            tft.text(0, tp - 20 - int(tft.fontSize()[1]/2), "{}".format(i), color)
-
-    # Return area to draw on inside the graph frame + convenience height / width:
-    return x0+1,\
-           y0+1,\
-           tft.winsize()[0]-2,\
-           tft.winsize()[1]-2,\
-           (tft.winsize()[1]-2)-(y0+1),\
-           (tft.winsize()[0]-2)-(x0+1)
-
-
-temp_graph_area = draw_temp_graph()
-
-
+vis = Visualization()
 while True:
     # Draw current temperatures on upper row for all sensors, in their colours:
     # .. but first draw empty string to initialize/reset LASTX to zero position
-    tft.text(1, 0, "")
+    vis.switch_window_to_whole_screen()
+    vis.tft.text(1, 0, "")
     for sensor in sensors:
-        tft.text(tft.LASTX, 0, '{}: {} '.format(sensor.get_name(), sensor.get_current_value()), sensor.get_color())
-
-    # Switch coordinates to the graph box
-    tft.setwin(40 + temp_graph_area[0], 52 + temp_graph_area[1], 40 + temp_graph_area[2], 52 + temp_graph_area[3])
+        vis.tft.text(vis.tft.LASTX, 0, '{}: {} '.format(sensor.get_name(), sensor.get_current_value()), sensor.get_color())
 
     # .. redraw graphs for all sensors:
-    tft.clearwin(tft.BLACK)
+    vis.switch_window_to_graph()
+    vis.clear_current_window()
     for sensor in sensors:
         current_position = 1
         # Depending on window size, the graph may not fill the entire screen due to rounding,
         # depending on the size and number of readings:
-        step_size = math.floor((tft.winsize()[0]-2) / max_number_of_readings)
+        step_size = math.floor(vis.graph_width / max_number_of_readings)
 
         for measurement in sensor.get_measurements():
             if sensor.get_model() is DS18B20:
-                tp = temp_to_pixel(temp=measurement, min_temp=-20, max_temp=30, height=temp_graph_area[4]-20) # TODO: Why -20 here?
+                tp = temp_to_pixel(temp=measurement, min_temp=-20, max_temp=30, height=vis.graph_height)
                 # TODO: Why -20 here?
-                tft.line(current_position, tp - 20, current_position + step_size, tp - 20, sensor.get_color())
+                vis.tft.line(current_position, tp - 20, current_position + step_size, tp - 20, sensor.get_color())
                 current_position += step_size
             else:
                 # Not implemented yet:
                 pass
 
-    # Reset window to what we had initially:
-    tft.setwin(40, 52, 278, 186)
