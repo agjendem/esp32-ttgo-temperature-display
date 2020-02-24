@@ -1,7 +1,10 @@
 # Hardware involved:
 ESP32 with TTGO display (flashed with Micropython from Loboris):
-* https://www.banggood.com/LILYGO-TTGO-T-Display-ESP32-CP2104-WiFi-bluetooth-Module-1_14-Inch-LCD-Development-Board-p-1522925.html
-* https://datasheets.maximintegrated.com/en/ds/DS18B20.pdf
+* Board: https://www.banggood.com/LILYGO-TTGO-T-Display-ESP32-CP2104-WiFi-bluetooth-Module-1_14-Inch-LCD-Development-Board-p-1522925.html
+* Temperature sensor: https://datasheets.maximintegrated.com/en/ds/DS18B20.pdf
+
+Board layout:
+![alt text](https://user-images.githubusercontent.com/20520240/69371506-03c1d200-0cb1-11ea-91ba-818778235c49.jpeg "Board layout")
 
 # Software:
 * http://micropython.org/
