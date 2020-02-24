@@ -68,6 +68,7 @@ class Visualization:
     def _init_display():
         # Initialize the display
         # https://github.com/loboris/MicroPython_ESP32_psRAM_LoBo/wiki/display
+        # https://github.com/loboris/MicroPython_ESP32_psRAM_LoBo/issues/310
         tft = display.TFT()
         tft.init(tft.ST7789,
                  rst_pin=23,
