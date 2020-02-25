@@ -1,6 +1,6 @@
 # Uses loboris micropython (esp32_psram_all_bt)
 # https://github.com/loboris/MicroPython_ESP32_psRAM_LoBo/tree/master/MicroPython_BUILD/firmware
-import display
+from display import TFT
 from machine import Pin, Onewire, DHT
 import math
 import time
@@ -114,7 +114,7 @@ class Visualization:
         # Initialize the display
         # https://github.com/loboris/MicroPython_ESP32_psRAM_LoBo/wiki/display
         # https://github.com/loboris/MicroPython_ESP32_psRAM_LoBo/issues/310
-        tft = display.TFT()
+        tft = TFT()
         tft.init(tft.ST7789,
                  rst_pin=23,
                  backl_pin=4,
@@ -207,9 +207,9 @@ class Visualization:
 ow = Onewire(33)
 
 sensors = [
-    DS18B20Sensor(name="Luft", sensor=Onewire.ds18x20(ow, 0), color=display.TFT.RED),
-    DS18B20Sensor(name="Bakke", sensor=Onewire.ds18x20(ow, 1), color=display.TFT.GREEN),
-    DS18B20Sensor(name="Inne", sensor=Onewire.ds18x20(ow, 2), color=display.TFT.BLUE)
+    DS18B20Sensor(name="Luft", sensor=Onewire.ds18x20(ow, 0), color=TFT.RED),
+    DS18B20Sensor(name="Bakke", sensor=Onewire.ds18x20(ow, 1), color=TFT.GREEN),
+    DS18B20Sensor(name="Inne", sensor=Onewire.ds18x20(ow, 2), color=TFT.BLUE)
 ]
 
 
