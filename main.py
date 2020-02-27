@@ -3,98 +3,7 @@
 from display import TFT
 from machine import Pin, Onewire, DHT
 import math
-import time
-
-DS18B20 = "DS18B20"
-DHT22 = "DHT22"
-
-# Setup data structure for local historical temperature measurements for the sensors:
-max_number_of_readings = 60
-
-
-class Sensor:
-    def __init__(self, name, model, sensor, color):
-        self.name = name
-        self.model = model
-        self.sensor = sensor
-        self.color = color
-        self.measurements = list()
-
-    def get_name(self):
-        return self.name
-
-    def get_color(self):
-        return self.color
-
-    def get_measurements(self):
-        return self.measurements
-
-    def get_model(self):
-        return self.model
-
-    def add_measurement(self, value: float):
-        if len(self.measurements) >= max_number_of_readings:
-            self.measurements.pop(0)
-        self.measurements.append(value)
-        print("Sensor: {} Type: {} Value: {}".format(self.name, self.model, value))
-
-    def get_current_value(self):
-        return ""
-
-
-class DS18B20Sensor(Sensor):
-    def __init__(self, name, sensor, color):
-        super().__init__(name, DS18B20, sensor, color)
-        self.rom_code = sensor.rom_code()
-
-    def get_current_value(self):
-        current_value = self.sensor.convert_read()
-        self.add_measurement(current_value)
-        return "{:2.1f}".format(current_value)
-
-
-class Button:
-    # Based on code from https://people.eecs.berkeley.edu/~boser/courses/49_sp_2019/N_gpio.html
-    # as a result of issues with built-in debounce-code in Loboris:
-    #   https://github.com/loboris/MicroPython_ESP32_psRAM_LoBo/issues/212
-
-    def __init__(self, pin, callback=None, falling=True, debounce_ms=50):
-        """ Button with debouncing. Arguments:
-        pin: pin number
-        callback: handler, called when button press detected
-        falling: detect raising or falling edges
-        """
-        self.last_time_ms = 0
-        self.detected = False  # a button press was detected
-        self.debounce_ms = debounce_ms
-        self.cb = callback
-        Pin(pin,
-            mode=Pin.IN,
-            pull=Pin.PULL_UP,
-            handler=self._irq_callback,
-            trigger=Pin.IRQ_FALLING if falling else Pin.IRQ_RISING)
-
-    def pressed(self):
-        """Return True if button pressed since last call"""
-        p = self.detected
-        self.detected = False
-        return p
-
-    def _irq_callback(self, pin):
-        # Limitations / rules: https://docs.micropython.org/en/latest/reference/isr_rules.html
-        # TODO: On other boards than ESP32 most of this should be done via micropython.schedule()
-        # (It seems that on ESP32, all interrupt handlers are by default scheduled by the interpreter)
-        t = time.ticks_ms()
-        diff = t - self.last_time_ms
-
-        if abs(diff) < self.debounce_ms:
-            return
-
-        self.last_time_ms = t
-        self.detected = True
-
-        if self.cb:
-            self.cb(pin)
+from tempboard import Button, DS18B20Sensor
 
 
 class Visualization:
@@ -108,6 +17,7 @@ class Visualization:
             self.graph_y0, \
             self.graph_width, \
             self.graph_height = self.render_graph_area_with_legend(self.min_temp, self.max_temp)
+        self.render_mode = "all"
 
     @staticmethod
     def _init_display():
@@ -202,6 +112,10 @@ class Visualization:
     def temp_to_pixel(self, temp):
         return self.temp_to_pixel_height(temp, self.graph_height)
 
+    def render_next_sensor(self):
+        # Rotate/toggle between each sensor available and all:
+        pass
+
 
 # dht = DHT(Pin(25), DHT.DHT2X)
 ow = Onewire(33)
@@ -242,13 +156,13 @@ while True:
 
     # Depending on window size, the graph may not fill the entire screen due to rounding,
     # depending on the size and number of readings:
-    step_size = math.floor(vis.graph_width / max_number_of_readings)
+    step_size = math.floor(vis.graph_width / DS18B20Sensor.max_number_of_readings)
 
     for sensor in sensors:
         current_position = 1
 
         for measurement in sensor.get_measurements():
-            if sensor.get_model() is DS18B20:
+            if sensor is DS18B20Sensor:
                 tp = vis.temp_to_pixel(measurement)
                 vis.tft.line(current_position, tp, current_position + step_size, tp, sensor.get_color())
                 current_position += step_size
