@@ -98,16 +98,22 @@ class Button:
 
 
 class Visualization:
-    def __init__(self, min_temp, max_temp):
+
+    def __init__(self, min_temp, max_temp, sensors):
         self.min_temp = min_temp
         self.max_temp = max_temp
+        self.sensors = sensors
+        self.RENDER_MODES = ["all"]
+        for sensor in sensors:
+            self.RENDER_MODES.append(sensor)
+        self.render_mode = 0
         self.tft = self._init_display()
 
-        self.switch_window_to_whole_screen()
+        self._switch_window_to_whole_screen()
         self.graph_x0, \
             self.graph_y0, \
             self.graph_width, \
-            self.graph_height = self.render_graph_area_with_legend(self.min_temp, self.max_temp)
+            self.graph_height = self._render_graph_area_with_legend(self.min_temp, self.max_temp)
 
     @staticmethod
     def _init_display():
@@ -135,7 +141,7 @@ class Visualization:
 
         return tft
 
-    def render_graph_area_with_legend(self, min_temp, max_temp):
+    def _render_graph_area_with_legend(self, min_temp, max_temp):
         # Width of broadest legend text expected
         x_legend_width = self.tft.textWidth("+30") + 1
         y_top_bar_height = 20
@@ -153,7 +159,7 @@ class Visualization:
     
         # Draw legend X indicators
         for i in range(min_temp, max_temp + 1, temp_step_size):
-            tp = self.temp_to_pixel_height(i, internal_graph_height)
+            tp = self._temp_to_pixel_height(i, internal_graph_height)
             self.tft.line(x0 - 4,
                           y0 + 1 + tp,
                           x0,
@@ -180,27 +186,73 @@ class Visualization:
             width - 2, \
             height - 2
 
-    def switch_window_to_whole_screen(self):
+    def _switch_window_to_whole_screen(self):
         # Set window size - library is buggy with the display, have to move the view slightly
         self.tft.setwin(40, 52, 278, 186)
 
-    def switch_window_to_graph(self):
+    def _switch_window_to_graph(self):
         self.tft.setwin(40 + self.graph_x0,
                         52 + self.graph_y0,
                         40 + self.graph_width + self.graph_x0 - 1,
                         52 + self.graph_height + self.graph_y0 - 1)
 
-    def clear_current_window(self):
+    def _clear_current_window(self):
         self.tft.clearwin(self.tft.BLACK)
 
-    def temp_to_pixel_height(self, temp, height):
+    def _temp_to_pixel_height(self, temp, height):
         temp_range = abs(self.min_temp - self.max_temp)
         pixels_per_degree = height / temp_range
         result = height - int(pixels_per_degree * (temp + abs(self.min_temp)))
         return result
 
-    def temp_to_pixel(self, temp):
-        return self.temp_to_pixel_height(temp, self.graph_height)
+    def _temp_to_pixel(self, temp):
+        return self._temp_to_pixel_height(temp, self.graph_height)
+
+    def next_render_mode(self):
+        if self.render_mode + 1 < len(self.RENDER_MODES):
+            self.render_mode += 1
+        else:
+            self.render_mode = 0
+        print(self.render_mode)
+
+    def render(self):
+        #
+        # Draw current temperatures on upper row for all sensors, in their colours:
+        #
+        # .. but first draw empty string to initialize/reset LASTX to zero position
+        self._switch_window_to_whole_screen()
+        self.tft.text(1, 0, "")
+        for sensor in sensors:
+            self.tft.text(self.tft.LASTX,
+                         0,
+                         '{}: {} '.format(sensor.get_name(), sensor.get_current_value()),
+                         sensor.get_color())
+
+        #
+        # .. redraw graphs for all/selected sensor(s):
+        #
+        self._switch_window_to_graph()
+        self._clear_current_window()
+
+        for sensor in sensors:
+            if self.render_mode is 0 \
+                    or self.RENDER_MODES[self.render_mode] is sensor:
+                self._render_sensor_graph(sensor)
+
+    def _render_sensor_graph(self, sensor):
+        # Depending on window size, the graph may not fill the entire screen due to rounding,
+        # depending on the size and number of readings:
+        step_size = math.floor(self.graph_width / max_number_of_readings)
+
+        current_position = 1
+        for measurement in sensor.get_measurements():
+            if sensor.get_model() is DS18B20:
+                tp = self._temp_to_pixel(measurement)
+                self.tft.line(current_position, tp, current_position + step_size, tp, sensor.get_color())
+                current_position += step_size
+            else:
+                # Not implemented yet:
+                pass
 
 
 # dht = DHT(Pin(25), DHT.DHT2X)
@@ -212,47 +264,14 @@ sensors = [
     DS18B20Sensor(name="Inne", sensor=Onewire.ds18x20(ow, 2), color=TFT.BLUE)
 ]
 
+vis = Visualization(min_temp=-20, max_temp=40, sensors=sensors)
+
 
 def cb(pin):
-    print("Pressed!", pin)
+    vis.next_render_mode()
+    print("Changing rendering mode to: {}".format(vis.render_mode), pin)
 
 
 toggle_sensors_button = Button(0, callback=cb)
-
-
-vis = Visualization(min_temp=-20, max_temp=40)
 while True:
-    #
-    # Draw current temperatures on upper row for all sensors, in their colours:
-    #
-    # .. but first draw empty string to initialize/reset LASTX to zero position
-    vis.switch_window_to_whole_screen()
-    vis.tft.text(1, 0, "")
-    for sensor in sensors:
-        vis.tft.text(vis.tft.LASTX,
-                     0,
-                     '{}: {} '.format(sensor.get_name(), sensor.get_current_value()),
-                     sensor.get_color())
-
-    #
-    # .. redraw graphs for all sensors:
-    #
-    vis.switch_window_to_graph()
-    vis.clear_current_window()
-
-    # Depending on window size, the graph may not fill the entire screen due to rounding,
-    # depending on the size and number of readings:
-    step_size = math.floor(vis.graph_width / max_number_of_readings)
-
-    for sensor in sensors:
-        current_position = 1
-
-        for measurement in sensor.get_measurements():
-            if sensor.get_model() is DS18B20:
-                tp = vis.temp_to_pixel(measurement)
-                vis.tft.line(current_position, tp, current_position + step_size, tp, sensor.get_color())
-                current_position += step_size
-            else:
-                # Not implemented yet:
-                pass
-
+    vis.render()
